@@ -86,7 +86,16 @@ func parseSnippets(snippetFileNames:[String]) -> [String: Snippet] {
         let filePath = path(for: fileName)
 
         /// snippet as dictionary
-        let snippetDict = NSDictionary(contentsOfFile: filePath) as? [String: Any]
+        var snippetDict = NSDictionary(contentsOfFile: filePath) as? [String: Any]
+
+        // Fixing of the snippet file in case when user edits snippet in text
+        // editor and forgets to use escaped form for placeholders
+        if snippetDict == nil, var content = try? String(contentsOfFile: filePath, encoding: .utf8) {
+            content = content.replacingOccurrences(of: "#>", with: "#&gt;").replacingOccurrences(of: "<#", with: "&lt;#")
+            if let _ = try? content.write(toFile: filePath, atomically: true, encoding: .utf8) {
+                snippetDict = NSDictionary(contentsOfFile: filePath) as? [String: Any]
+            }
+        }
 
         /// original file name without extension
         let fileNameWithoutExtension = fileName.replacingOccurrences(of: snippetFileExt, with: "")
@@ -103,8 +112,15 @@ func parseSnippets(snippetFileNames:[String]) -> [String: Snippet] {
 
 func fixShortcuts(snippetsByFileName:[String: Snippet]) -> [String: Snippet] {
     let shortcutKey = Snippet.CodingKeys.shortcut.rawValue
-    let keywords = ["classBody", "doc", "example", "ext", "func", "impl", "inline", "prop", "prot", "mark", "mit", "rlm", "rx", "usr", "var"]
+    let keywords = ["classBody", "doc", "example", "ext", "func", "impl", "inline", "podspec", "prop", "prot", "mark", "mit", "rlm", "rx", "usr", "var"]
     let keywordsPriority = ["rx": 100, "rlm": 99, "impl": -1] // default priority is 0
+
+    /// Separator to use in normalized version of the shortcut to separate prefixes
+    let targetSeparator = "_"
+
+    /// Known separators which can be used to separate prefixes.
+    /// Any of this separators will be replaced by the `targetSeparator`
+    let knownSeparators = "-_:"
 
     var fixedSnippets:[String: Snippet] = [:]
     for (fileName, row) in snippetsByFileName {
@@ -120,15 +136,15 @@ func fixShortcuts(snippetsByFileName:[String: Snippet]) -> [String: Snippet] {
 
         /// all known prefixes included in shortcut
         var prefixes = keywords.reduce(into: [String](), { (result, key) in
-            if let _ = shortcut.range(of: "\(key)[-_]", options: .regularExpression) {
+            if let _ = shortcut.range(of: "\(key)[\(knownSeparators)]", options: .regularExpression) {
                 result.append(key)
             }
         })
 
         /// shortcut with removed all prefixes and other allowed separators
         let trimmedShortcut = prefixes.reduce(shortcut, { (result, prefix) -> String in
-            if let range = result.range(of: "\(prefix)[-_]", options: .regularExpression) {
-                return result.replacingCharacters(in: range, with: "").trimmingCharacters(in: CharacterSet(charactersIn: "-_"))
+            if let range = result.range(of: "\(prefix)[\(knownSeparators)]", options: .regularExpression) {
+                return result.replacingCharacters(in: range, with: "").trimmingCharacters(in: CharacterSet(charactersIn: knownSeparators))
             }
             return result
         })
@@ -144,7 +160,7 @@ func fixShortcuts(snippetsByFileName:[String: Snippet]) -> [String: Snippet] {
         prefixes.append(trimmedShortcut)
 
         /// New valid shortcut and file name
-        let newShortcut = prefixes.joined(separator: "-")
+        let newShortcut = prefixes.joined(separator: targetSeparator)
 
         // if shortcut is changed update shortcut in existing file
         var fixedRow = row
