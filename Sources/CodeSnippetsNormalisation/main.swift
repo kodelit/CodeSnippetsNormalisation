@@ -266,14 +266,16 @@ func generateListFile(_ snippets:[Snippet]) {
     ---|---|---|---|---|\(hasOptionalColumn ? "---|" : "" )
     """
 
+    let fileManager = FileManager.default
+    
     /// Directory containing detail files of the snippets
     let detailsDir = path(for: snippetDetailsRelativePath(for: "", fileExtension: nil))
-    let doesDirExist = FileManager.default.fileExists(atPath: detailsDir)
+    let doesDirExist = fileManager.fileExists(atPath: detailsDir)
 
     // Remove old details dir if it exists
     if doesDirExist {
         do {
-            try FileManager.default.removeItem(atPath: detailsDir)
+            try fileManager.removeItem(atPath: detailsDir)
         }catch{
             print("Could not remove `/details dir", error)
         }
@@ -281,9 +283,9 @@ func generateListFile(_ snippets:[Snippet]) {
 
     // Create details dir needed
     if shouldGenDetail {
-        if !FileManager.default.fileExists(atPath: detailsDir) {
+        if !fileManager.fileExists(atPath: detailsDir) {
             do {
-                try FileManager.default.createDirectory(atPath: detailsDir, withIntermediateDirectories: true, attributes: nil)
+                try fileManager.createDirectory(atPath: detailsDir, withIntermediateDirectories: true, attributes: nil)
             }catch{
                 print(error)
                 shouldGenDetail = false
